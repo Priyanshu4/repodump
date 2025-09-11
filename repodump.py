@@ -86,12 +86,28 @@ def matches_pattern(file_path: str, pattern: str, is_dir: bool = False) -> bool:
     # Handle patterns with directory separators
     if '/' in pattern:
         pattern_parts = pattern.split('/')
+        
+        # For directories, check if the directory path matches the pattern exactly
+        if is_dir and file_path == pattern:
+            return True
+            
+        # Check if file_path starts with pattern (for directory matching)
+        if file_path.startswith(pattern + '/'):
+            return True
+            
         # Try matching the pattern at any position in the path
         for i in range(len(path_parts) - len(pattern_parts) + 1):
             test_parts = path_parts[i:i + len(pattern_parts)]
             test_path = '/'.join(test_parts)
             if fnmatch.fnmatch(test_path, pattern):
                 return True
+                
+        # Check if any parent directory path matches the pattern
+        for i in range(1, len(path_parts) + 1):
+            parent_path = '/'.join(path_parts[:i])
+            if fnmatch.fnmatch(parent_path, pattern):
+                return True
+                
         return False
     
     # Simple pattern matching - check each path component and full path
@@ -111,6 +127,25 @@ def matches_pattern(file_path: str, pattern: str, is_dir: bool = False) -> bool:
     return False
 
 
+def path_is_under_pattern(file_path: str, pattern: str) -> bool:
+    """
+    Check if a file path is under a directory pattern.
+    
+    Args:
+        file_path: The file path to check
+        pattern: The directory pattern
+        
+    Returns:
+        True if the file is under the pattern directory
+    """
+    # Normalize pattern - remove trailing slash if present
+    if pattern.endswith('/'):
+        pattern = pattern[:-1]
+    
+    # Check if file is directly under or within the pattern directory
+    return file_path.startswith(pattern + '/') or file_path == pattern
+
+
 def should_include_file(file_path: str, is_dir: bool, include_patterns: List[str], 
                        exclude_patterns: List[str], filter_patterns: List[str]) -> bool:
     """
@@ -128,7 +163,17 @@ def should_include_file(file_path: str, is_dir: bool, include_patterns: List[str
     """
     # Step 1: Apply filter patterns (whitelist) - if any filters exist, file must match at least one
     if filter_patterns:
-        if not any(matches_pattern(file_path, pattern, is_dir) for pattern in filter_patterns):
+        matched_filter = False
+        for pattern in filter_patterns:
+            if matches_pattern(file_path, pattern, is_dir):
+                matched_filter = True
+                break
+            # Also check if this file is under a directory that matches the pattern
+            if not is_dir and path_is_under_pattern(file_path, pattern):
+                matched_filter = True
+                break
+        
+        if not matched_filter:
             return False
     
     # Step 2: Apply exclude patterns
@@ -143,10 +188,23 @@ def should_include_file(file_path: str, is_dir: bool, include_patterns: List[str
                 included_by_negation = True
         elif matches_pattern(file_path, pattern, is_dir):
             excluded = True
+        # Also check if this file is under an excluded directory
+        elif not is_dir and path_is_under_pattern(file_path, pattern):
+            excluded = True
     
     if excluded and not included_by_negation:
         # Step 3: Check include patterns (override exclusions)
-        if not any(matches_pattern(file_path, pattern, is_dir) for pattern in include_patterns):
+        override_exclusion = False
+        for pattern in include_patterns:
+            if matches_pattern(file_path, pattern, is_dir):
+                override_exclusion = True
+                break
+            # Also check if this file is under an included directory
+            if not is_dir and path_is_under_pattern(file_path, pattern):
+                override_exclusion = True
+                break
+        
+        if not override_exclusion:
             return False
     
     return True
@@ -215,8 +273,26 @@ def collect_all_files(root_path: str, include_patterns: List[str], exclude_patte
         if not is_root:
             include_dir_in_structure = should_include_file(rel_path, True, include_patterns, 
                                                          exclude_patterns, filter_patterns)
-            if not include_dir_in_structure:
-                return False  # Don't traverse excluded directories
+            # Even if directory is not included in structure, we might still need to traverse it
+            # if it contains files that should be included
+            should_traverse = include_dir_in_structure
+            
+            # Check if any filter patterns might include files under this directory
+            if not should_traverse and filter_patterns:
+                for pattern in filter_patterns:
+                    if pattern.startswith(rel_path + '/') or (not '/' in pattern):
+                        should_traverse = True
+                        break
+            
+            # Check if any include patterns might include files under this directory
+            if not should_traverse and include_patterns:
+                for pattern in include_patterns:
+                    if pattern.startswith(rel_path + '/') or (not '/' in pattern):
+                        should_traverse = True
+                        break
+            
+            if not should_traverse:
+                return False  # Don't traverse this directory
         else:
             include_dir_in_structure = True
         
