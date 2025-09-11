@@ -25,9 +25,11 @@ For each of these arguments, you should also generated an aquedate short form.
 
 ## Inclusions and Exclusions
 Inclusion and exclusion patterns should be applied in this order:
-1. All files not matching the filters are excluded
-2. All files matching the exclude patterns (including the `.gitignore` and always excluded patterns) are excluded
-3. All files matching the include patterns are re-included.
+1. Filter patterns: Files that do match these patterns should be excluded
+2. Exclude patterns: Files matching these patterns are excluded (including `.gitignore` and always-excluded patterns like `.git/`)
+3. Include patterns: Files matching these patterns are re-included, overriding exclusions
+4. Content-only patterns: Applied after structure filters to control file content inclusion
+
 
 Exclusions that only apply to content should be applied after exclusions that apply to both content and directory structure. For instance, `--filter-files` should be applied after `--filter`.
 
@@ -113,4 +115,5 @@ Your code should not require any dependencies that are not within the Python sta
     - In general, avoid having large functions and opt for small, simple and easily understandable functions.
 - Your code should be using type annotations. 
 - Each function in your code should have detailed docstrings.
-- Your code should expose a function that matches the exclusion and inclusion arguments of the script itself. The function should return a tuple that contains some representation of the directory structure and a list of filepaths to include in the file contents.
+- Your code should also be useful as a "library" that exposes functions for use in other scripts.
+    - For instance, you should expose a function that matches the exclusion and inclusion arguments of the script itself. The function should return some representation of the directory structure and a list of filepaths to include in the file contents.
