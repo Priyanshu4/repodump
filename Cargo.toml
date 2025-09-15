@@ -1,0 +1,19 @@
+[package]
+name = "repodump"
+version = "0.1.0"
+edition = "2021"
+description = "Generate LLM-friendly text files from directories and git repositories"
+authors = ["Priyanshu Agrawal"]
+license = "MIT"
+
+[[bin]]
+name = "repodump"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.4", features = ["derive"] }
+gix = "0.66"
+ignore = "0.4"
+globset = "0.4"
+anyhow = "1.0"
+tempfile = "3.22.0"
