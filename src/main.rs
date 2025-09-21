@@ -32,20 +32,24 @@ struct Cli {
     #[arg(short = 'i', long = "ignore-gitignore")]
     ignore_gitignore: bool,
 
-    /// Only include files matching these patterns
+    /// Only include files any of matching these patterns
     #[arg(short = 'f', long = "filter")]
     filter: Vec<String>,
 
-    /// Exclude files matching these patterns
+    /// Exclude files matching any of these patterns
     #[arg(short = 'e', long = "exclude")]
     exclude: Vec<String>,
 
-    /// Include files matching these patterns, overriding exclusions
+    /// Include files matching any of these patterns, overriding exclusions
     #[arg(long = "include")]
     include: Vec<String>,
 
+    /// Apply custom filter and exclusion patterns to the directory structure tree
+    #[arg(short = 'p', long = "prune-tree")]
+    prune_tree: bool,
+
     /// Add prompt text at the bottom of the repodump file
-    #[arg(short = 'p', long = "prompt")]
+    #[arg(long = "prompt")]
     prompt: Option<String>,
 
     /// Do not output a summary to stdout
@@ -192,7 +196,6 @@ fn collect_files(
     } else {
         // Respect .gitignore even if not a git repo
         builder.add_custom_ignore_filename(".gitignore");
-        builder.git_ignore(false); // disable git repo lookups
     }
 
     let mut files = Vec::new();
@@ -405,32 +408,43 @@ fn main() -> Result<()> {
     // Create an exclude filter that always excludes .git
     let exclude_git = vec![".git".to_string(), ".git/**".to_string()];
     let mut all_excludes = cli.exclude.clone();
-    all_excludes.extend(exclude_git);
+    all_excludes.extend(exclude_git.clone());
 
-    // Create file filter
-    let filter = FileFilter::new(cli.filter, all_excludes, cli.include)?;
+    // Gather files for content section
+    let content_filter = FileFilter::new(cli.filter, all_excludes, cli.include.clone())?;
+    let content_files = collect_files(&target_dir, &content_filter, cli.ignore_gitignore)?;
 
-    // Collect files
-    let files = collect_files(&target_dir, &filter, cli.ignore_gitignore)?;
+    // Gather files for tree structure section
+    let tree_files = if cli.prune_tree {
+        // If pruning tree, use the same files as content section
+        content_files.clone()
+    } else {
+        let tree_filter = FileFilter::new(vec![], exclude_git, cli.include.clone())?;
+        collect_files(&target_dir, &tree_filter, cli.ignore_gitignore)?
+    };
 
     // Generate output content
     let mut output_content = String::new();
 
-    let structure_file_count = if !cli.contents_only {
-        let tree = generate_directory_tree(&target_dir, &files)?;
+    let structure_file_count;
+    if !cli.contents_only {
+        // Generate tree
+        let tree = generate_directory_tree(&target_dir, &tree_files)?;
         output_content.push_str(&tree);
         output_content.push('\n');
-        files.len()
+        structure_file_count = tree_files.len()
     } else {
-        0
-    };
+        structure_file_count = 0;
+    }
 
-    let content_file_count = if !cli.tree_only {
-        let contents = generate_file_contents(&target_dir, &files)?;
+    let content_file_count;
+    if !cli.tree_only {
+        // Generate file contents
+        let contents = generate_file_contents(&target_dir, &content_files)?;
         output_content.push_str(&contents);
-        files.len()
+        content_file_count = content_files.len()
     } else {
-        0
+        content_file_count = 0
     };
 
     // Add prompt if provided

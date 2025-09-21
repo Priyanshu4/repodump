@@ -9,13 +9,14 @@ There should be one optional positional argument for the path of the input repos
 
 ### Named Arguments
 The script should have several named arguments:
-- `--output <file>`: Output file path. By default, the generated file is called `repodump.txt`
+- `--output <file>`: Output file path. By default, the generated file is called `repodump.txt`.
 - `--tree`: Only include the directory structure but not the file contents.
 - `--contents`: Only include the file contents but not the directory structure.
 - `--ignore-gitignore`: Ignore .gitignore files.
-- `--filter <patterns>`: Only include files matching these patterns.
-- `--exclude <patterns>`: Exclude files matching these patterns.
-- `--include <patterns>`: Include files matching these patterns, forcefully overriding exclusions by by other patterns.
+- `--filter <patterns>`: Only include files matching any of these patterns.
+- `--exclude <patterns>`: Exclude files matching any of these patterns.
+- `--include <patterns>`: Include files matching any of these patterns, forcefully overriding exclusions by by other patterns.
+- `--prune-tree`: Apply the custom filter and exclusion patterns to the repository directory structure tree in the output, in addition to the file contents section. By default, the directory structure in the output contains the full repository, excluding files ignored by gitignore.
 - `--prompt <prompt_text>`: Add prompt text at the bottom of the repodump file. 
 - `--quiet`: Do not output a summary of the generated file to stdout. 
 
@@ -29,6 +30,16 @@ Inclusion and exclusion patterns should be applied in this order:
 
 There are certain files that should always be excluded unless specifically overrided with an include:
 - .git/
+
+### Directory Structure
+
+By default, the CLI provided filter and exclusion patterns should apply only to the "File Contents" section of the output, not the directory structure tree section. 
+
+For the directory structure, the following patterns should be applied:
+- Exclude `.gitignore` patterns and always excluded patterns
+- Include the CLI provided `include` patterns
+
+However, if `--prune-tree` is provided, then the directory structure should match the files present in the file contents section.Only the `.gitignore` and always excluded patterns should be applied to the directory structure. 
 
 ## Output Format 
 
