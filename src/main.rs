@@ -29,7 +29,7 @@ struct Cli {
     contents_only: bool,
 
     /// Ignore .gitignore files
-    #[arg(short = 'i', long = "ignore-gitignore")]
+    #[arg(short = 'g', long = "ignore-gitignore")]
     ignore_gitignore: bool,
 
     /// Only include files any of matching these patterns
@@ -41,7 +41,7 @@ struct Cli {
     exclude: Vec<String>,
 
     /// Include files matching any of these patterns, overriding exclusions
-    #[arg(long = "include")]
+    #[arg(short = 'i', long = "include")]
     include: Vec<String>,
 
     /// Apply custom filter and exclusion patterns to the directory structure tree
@@ -49,7 +49,7 @@ struct Cli {
     prune_tree: bool,
 
     /// Add prompt text at the bottom of the repodump file
-    #[arg(long = "prompt")]
+    #[arg(short = 'm', long = "prompt")]
     prompt: Option<String>,
 
     /// Do not output a summary to stdout
