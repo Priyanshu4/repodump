@@ -235,84 +235,98 @@ fn generate_directory_tree(root_path: &Path, files: &[PathBuf]) -> Result<String
         .to_string_lossy();
 
     tree.push_str("Directory Structure:\n");
-    tree.push_str(&format!("└── {}/\n", root_name));
+    tree.push_str(&format!("{}/\n", root_name));
 
     if files.is_empty() {
         return Ok(tree);
     }
 
     // Build a hierarchical structure
-    let mut file_tree: std::collections::BTreeMap<String, Vec<String>> =
-        std::collections::BTreeMap::new();
-    let mut all_dirs: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    use std::collections::{BTreeMap, BTreeSet};
 
-    // Process each file to build the tree structure
+    let mut directory_children: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut all_paths: BTreeSet<String> = BTreeSet::new();
+
+    // Collect all directories and files
     for file in files {
         let file_path_str = file.to_string_lossy().replace('\\', "/");
+        all_paths.insert(file_path_str.clone());
 
-        // Add all parent directories
-        if let Some(parent) = file.parent() {
-            let parent_str = parent.to_string_lossy().replace('\\', "/");
-            if !parent_str.is_empty() {
-                all_dirs.insert(parent_str.clone());
-                file_tree.entry(parent_str).or_insert_with(Vec::new);
+        // Add all parent directories to the structure
+        let mut current_path = String::new();
+        let parts: Vec<&str> = file_path_str.split('/').collect();
+
+        for (i, part) in parts.iter().enumerate() {
+            let parent_path = current_path.clone();
+
+            if i > 0 {
+                current_path.push('/');
+            }
+            current_path.push_str(part);
+
+            if i < parts.len() - 1 {
+                // This is a directory
+                all_paths.insert(current_path.clone());
+            }
+
+            // Add to parent's children
+            directory_children
+                .entry(parent_path)
+                .or_insert_with(BTreeSet::new)
+                .insert(current_path.clone());
+        }
+    }
+
+    // Recursive function to print tree structure
+    fn print_tree_recursive(
+        tree: &mut String,
+        directory_children: &BTreeMap<String, BTreeSet<String>>,
+        all_paths: &BTreeSet<String>,
+        current_dir: &str,
+        prefix: &str,
+    ) {
+        if let Some(children) = directory_children.get(current_dir) {
+            let children_vec: Vec<String> = children.iter().cloned().collect();
+
+            for (i, child) in children_vec.iter().enumerate() {
+                let is_last_child = i == children_vec.len() - 1;
+                let child_name = if child.is_empty() {
+                    continue;
+                } else {
+                    child.split('/').last().unwrap_or(child)
+                };
+
+                // Determine if this is a directory
+                let is_directory = directory_children.contains_key(child);
+
+                // Choose the appropriate tree character
+                let connector = if is_last_child {
+                    "└── "
+                } else {
+                    "├── "
+                };
+                let child_suffix = if is_directory { "/" } else { "" };
+
+                tree.push_str(&format!(
+                    "{}{}{}{}\n",
+                    prefix, connector, child_name, child_suffix
+                ));
+
+                // Prepare prefix for children
+                let child_prefix = if is_last_child {
+                    format!("{}    ", prefix)
+                } else {
+                    format!("{}│   ", prefix)
+                };
+
+                // Recursively print children
+                print_tree_recursive(tree, directory_children, all_paths, child, &child_prefix);
             }
         }
-
-        // Add the file to its parent directory
-        let parent_key = file
-            .parent()
-            .map(|p| p.to_string_lossy().replace('\\', "/"))
-            .unwrap_or_else(|| String::new());
-
-        file_tree
-            .entry(parent_key)
-            .or_insert_with(Vec::new)
-            .push(file_path_str);
     }
 
-    // Create a sorted list of all entries with their depths and types
-    let mut entries: Vec<(usize, String, bool)> = Vec::new(); // (depth, path, is_dir)
-
-    // Add directories first
-    for dir in &all_dirs {
-        let depth = if dir.is_empty() {
-            0
-        } else {
-            dir.matches('/').count() + 1
-        };
-        entries.push((depth, dir.clone(), true));
-    }
-
-    // Add files
-    for file in files {
-        let file_str = file.to_string_lossy().replace('\\', "/");
-        let depth = file_str.matches('/').count() + 1;
-        entries.push((depth, file_str, false));
-    }
-
-    // Sort by depth first, then by path
-    entries.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
-
-    // Generate the tree with proper indentation
-    for (depth, path_str, is_dir) in entries {
-        let indent = "    ".repeat(depth);
-
-        let name = if path_str.is_empty() {
-            continue; // Skip empty paths
-        } else {
-            Path::new(&path_str)
-                .file_name()
-                .unwrap_or_else(|| std::ffi::OsStr::new(&path_str))
-                .to_string_lossy()
-        };
-
-        if is_dir {
-            tree.push_str(&format!("{}├── {}/\n", indent, name));
-        } else {
-            tree.push_str(&format!("{}├── {}\n", indent, name));
-        }
-    }
+    // Start recursive printing from root
+    print_tree_recursive(&mut tree, &directory_children, &all_paths, "", "");
 
     Ok(tree)
 }
